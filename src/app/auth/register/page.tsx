@@ -8,6 +8,7 @@ import {
   Mail, Lock, Eye, EyeOff, Heart, ArrowRight, ArrowLeft,
   AlertCircle, Loader2, User, Phone, MapPin, Droplets, Check, Shield
 } from 'lucide-react'
+import { createUserProfile } from '@/app/actions/auth'
 
 const BLOOD_GROUPS = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
 
@@ -267,13 +268,11 @@ export default function Register() {
         is_donor: formData.isDonor,
       }
 
-      // Try upsert — RLS allows users to insert/update their own profile
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert(profilePayload, { onConflict: 'id' })
+      // Use server action with admin client to bypass RLS
+      const result = await createUserProfile(profilePayload)
 
-      if (upsertError) {
-        setError(upsertError.message || 'Profile creation failed. Please contact support.')
+      if (!result.success) {
+        setError(result.error || 'Profile creation failed. Please contact support.')
         setLoading(false)
         return
       }

@@ -7,6 +7,7 @@ import {
   Heart, Droplets, Phone, MapPin, User,
   AlertCircle, Loader2, Check, ArrowRight
 } from 'lucide-react'
+import { createUserProfile } from '@/app/actions/auth'
 
 const BLOOD_GROUPS = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
 
@@ -80,21 +81,19 @@ export default function CompleteProfile() {
         return
       }
 
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          email: user.email || '',
-          full_name: formData.fullName.trim(),
-          age: parseInt(formData.age),
-          blood_group: formData.bloodGroup,
-          phone: formData.phone.trim(),
-          location: formData.location.trim(),
-          is_donor: formData.isDonor,
-        }, { onConflict: 'id' })
+      const result = await createUserProfile({
+        id: user.id,
+        email: user.email || '',
+        full_name: formData.fullName.trim(),
+        age: parseInt(formData.age),
+        blood_group: formData.bloodGroup,
+        phone: formData.phone.trim(),
+        location: formData.location.trim(),
+        is_donor: formData.isDonor,
+      })
 
-      if (upsertError) {
-        setError(upsertError.message || 'Failed to save profile. Please try again.')
+      if (!result.success) {
+        setError(result.error || 'Failed to save profile. Please try again.')
         setLoading(false)
         return
       }
