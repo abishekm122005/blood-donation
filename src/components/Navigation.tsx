@@ -1,39 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { useState } from 'react'
+import { useAuth } from './AuthProvider'
 
 export default function Navigation() {
-  const [user, setUser] = useState<any>(null)
+  const { user, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
-  const [supabase, setSupabase] = useState<any>(null)
-
-  useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (url && key) {
-      const client = createClient(url, key)
-      setSupabase(client)
-
-      const { data: { subscription } } = client.auth.onAuthStateChange(() => {
-        client.auth.getUser().then(({ data: { user } }) => {
-          setUser(user)
-        })
-      })
-
-      return () => {
-        subscription?.unsubscribe()
-      }
-    }
-  }, [])
 
   const handleLogout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut()
-      setUser(null)
-    }
+    await signOut()
   }
 
   return (
