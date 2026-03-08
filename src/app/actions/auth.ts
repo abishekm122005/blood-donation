@@ -73,7 +73,7 @@ export async function resetPassword(email: string) {
     const supabaseAdmin = getAdminClient()
 
     const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/auth/login`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : ''}/auth/login`,
     })
 
     if (error) throw new Error(error.message)
