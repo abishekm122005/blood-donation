@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { createUserProfile } from '@/app/actions/auth'
 import Link from 'next/link'
 import {
   Mail, Lock, Eye, EyeOff, Heart, ArrowRight, ArrowLeft,
@@ -248,7 +247,13 @@ export default function Register() {
     setLoading(true)
 
     try {
-      const profileResult = await createUserProfile({
+      if (!supabase) {
+        setError('Service unavailable. Please try again later.')
+        setLoading(false)
+        return
+      }
+
+      const profilePayload = {
         id: userId,
         email: formData.email.trim().toLowerCase() || user?.email || '',
         full_name: formData.fullName.trim(),
@@ -257,10 +262,15 @@ export default function Register() {
         phone: formData.phone.trim(),
         location: formData.location.trim(),
         is_donor: formData.isDonor,
-      })
+      }
 
-      if (!profileResult.success) {
-        setError(profileResult.error || 'Profile creation failed. Please contact support.')
+      // Try upsert — RLS allows users to insert/update their own profile
+      const { error: upsertError } = await supabase
+        .from('profiles')
+        .upsert(profilePayload, { onConflict: 'id' })
+
+      if (upsertError) {
+        setError(upsertError.message || 'Profile creation failed. Please contact support.')
         setLoading(false)
         return
       }

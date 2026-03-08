@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 
 interface AuthContextType {
@@ -19,31 +19,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    try {
+      const client = getSupabaseClient()
+      setSupabase(client)
 
-    if (!url || !key) {
+      // Get initial user
+      client.auth.getUser().then(({ data: { user } }) => {
+        setUser(user ?? null)
+        setLoading(false)
+      })
+
+      // Listen for auth changes
+      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null)
+      })
+
+      return () => {
+        subscription?.unsubscribe()
+      }
+    } catch {
       console.error('Supabase configuration is missing')
       setLoading(false)
-      return
-    }
-
-    const client = createClient(url, key)
-    setSupabase(client)
-
-    // Get initial user
-    client.auth.getUser().then(({ data: { user } }) => {
-      setUser(user ?? null)
-      setLoading(false)
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => {
-      subscription?.unsubscribe()
     }
   }, [])
 
