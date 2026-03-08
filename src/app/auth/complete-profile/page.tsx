@@ -99,7 +99,9 @@ export default function CompleteProfile() {
         return
       }
 
-      router.push('/dashboard')
+      // Sign out so user must login fresh after completing profile
+      await supabase.auth.signOut()
+      router.push('/auth/login?registered=true')
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

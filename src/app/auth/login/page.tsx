@@ -1,13 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import Link from 'next/link'
-import { Mail, Lock, Eye, EyeOff, Heart, ArrowRight, AlertCircle, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Heart, ArrowRight, AlertCircle, Loader2, CheckCircle } from 'lucide-react'
 
-export default function Login() {
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <Login />
+    </Suspense>
+  )
+}
+
+function Login() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const justRegistered = searchParams.get('registered') === 'true'
   const { supabase, user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -141,6 +151,13 @@ export default function Login() {
             <h2 className="text-3xl font-bold text-gray-900">Welcome back</h2>
             <p className="text-gray-500 mt-2">Sign in to your account to continue</p>
           </div>
+
+          {justRegistered && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
+              <p className="text-green-700 text-sm">Registration successful! Please sign in to continue.</p>
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">

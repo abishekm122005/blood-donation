@@ -181,6 +181,9 @@ export default function Register() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       })
 
       if (authError) {
@@ -216,7 +219,7 @@ export default function Register() {
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/register?step=2` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
       if (oauthError) {
         setError('Google signup failed. Please try again.')
@@ -275,13 +278,14 @@ export default function Register() {
         return
       }
 
-      setSuccessMessage('Account created successfully! Redirecting...')
+      setSuccessMessage('Account created successfully! Please login to continue...')
 
+      // Always redirect to login after registration
       if (signupMethod === 'google' || user) {
-        setTimeout(() => router.push('/dashboard'), 1500)
-      } else {
-        setTimeout(() => router.push('/auth/login'), 1500)
+        // Sign out so user must login fresh
+        await supabase.auth.signOut()
       }
+      setTimeout(() => router.push('/auth/login?registered=true'), 1500)
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

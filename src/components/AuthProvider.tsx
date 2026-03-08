@@ -23,9 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseClient()
       setSupabase(client)
 
-      // Get initial user
-      client.auth.getUser().then(({ data: { user } }) => {
-        setUser(user ?? null)
+      // Get initial session (reads from cookies via @supabase/ssr)
+      client.auth.getSession().then(({ data: { session } }) => {
+        setUser(session?.user ?? null)
         setLoading(false)
       })
 
