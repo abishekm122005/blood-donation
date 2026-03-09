@@ -155,10 +155,15 @@ export default function SearchDonors() {
                     </div>
 
                     <div className="space-y-2 mb-4">
-                      <div className="flex items-center text-gray-700">
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(donor.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center text-gray-700 hover:text-red-600 hover:underline"
+                      >
                         <MapPin size={16} className="mr-2 text-red-600" />
                         <span className="text-sm">{donor.location}</span>
-                      </div>
+                      </a>
                       <div className="flex items-center text-gray-700">
                         <Phone size={16} className="mr-2 text-red-600" />
                         <span className="text-sm">{donor.phone}</span>

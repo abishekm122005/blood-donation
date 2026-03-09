@@ -229,10 +229,15 @@ export default function DonationCamps() {
                 </div>
 
                 <div className="space-y-2.5 mb-5 text-sm">
-                  <div className="flex items-center text-gray-600">
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(camp.name + ', ' + camp.location)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-gray-600 hover:text-red-600 hover:underline"
+                  >
                     <MapPin className="w-4 h-4 mr-2.5 text-red-500 shrink-0" />
                     <span>{camp.location}</span>
-                  </div>
+                  </a>
                   <div className="flex items-center text-gray-600">
                     <Calendar className="w-4 h-4 mr-2.5 text-red-500 shrink-0" />
                     <span>

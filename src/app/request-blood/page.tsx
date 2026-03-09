@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
 import { createBloodRequest, getBloodRequests } from '@/lib/database'
 import { BloodRequest, BloodGroup } from '@/types/database'
-import { AlertCircle, MapPin, Droplet, Clock } from 'lucide-react'
+import { AlertCircle, MapPin, Droplet, Clock, LocateFixed, Loader2 } from 'lucide-react'
 
 const BLOOD_GROUPS = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
 const URGENCY_LEVELS = ['low', 'medium', 'high', 'critical']
@@ -26,6 +26,8 @@ export default function RequestBlood() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -64,6 +66,46 @@ export default function RequestBlood() {
     }))
   }
 
+  const detectLocation = async () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser')
+      return
+    }
+    setLocationLoading(true)
+    setError('')
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        setUserCoords({ lat: latitude, lng: longitude })
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en' } }
+          )
+          const data = await res.json()
+          if (data.address) {
+            const addr = data.address
+            const locationStr = [addr.city || addr.town || addr.village, addr.state].filter(Boolean).join(', ')
+            setFormData(prev => ({ ...prev, location: locationStr || data.display_name }))
+          }
+        } catch {
+          // coordinates saved even if reverse geocoding fails
+        } finally {
+          setLocationLoading(false)
+        }
+      },
+      (err) => {
+        setError(
+          err.code === 1
+            ? 'Location permission denied. Please allow location access or type the address manually.'
+            : 'Failed to detect location. Please type the address manually.'
+        )
+        setLocationLoading(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -77,9 +119,8 @@ export default function RequestBlood() {
         return
       }
 
-      // Simulated latitude and longitude
-      const latitude = 40.7128
-      const longitude = -74.0060
+      const latitude = userCoords?.lat ?? 0
+      const longitude = userCoords?.lng ?? 0
 
       const newRequest = await createBloodRequest({
         requester_id: user.id,
@@ -219,15 +260,41 @@ export default function RequestBlood() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Location/Address
                   </label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                    placeholder="New York, NY"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      name="location"
+                      value={formData.location}
+                      onChange={handleChange}
+                      required
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                      placeholder="Coimbatore, Tamil Nadu"
+                    />
+                    <button
+                      type="button"
+                      onClick={detectLocation}
+                      disabled={locationLoading}
+                      className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 flex items-center gap-1 shrink-0"
+                      title="Use my current location"
+                    >
+                      {locationLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <LocateFixed className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                  {userCoords && (
+                    <a
+                      href={`https://www.google.com/maps?q=${userCoords.lat},${userCoords.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-red-600 hover:underline mt-1 inline-flex items-center gap-1"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      View on Map
+                    </a>
+                  )}
                 </div>
 
                 <div>
@@ -283,7 +350,15 @@ export default function RequestBlood() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">{request.hospital_name}</h3>
-                      <p className="text-gray-600">{request.location}</p>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(request.hospital_name + ', ' + request.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-red-600 hover:underline flex items-center gap-1"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        {request.location}
+                      </a>
                     </div>
                     <span className={`inline-block px-3 py-1 rounded-full font-semibold text-white ${
                       request.urgency === 'critical' ? 'bg-red-600' :
@@ -323,9 +398,16 @@ export default function RequestBlood() {
                     <p className="text-gray-600 mb-4">{request.description}</p>
                   )}
 
-                  <button className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700">
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      `🚨 *Emergency Blood Request*\n\n🏥 Hospital: ${request.hospital_name}\n📍 Location: ${request.location}\n🩸 Blood Group: ${request.blood_group}\n💉 Units Needed: ${request.units_needed}\n⚡ Urgency: ${request.urgency.toUpperCase()}\n📅 Posted: ${new Date(request.created_at).toLocaleDateString()}${request.description ? `\n📝 Details: ${request.description}` : ''}\n\nPlease help if you can donate! 🙏`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700"
+                  >
                     Contact Donors
-                  </button>
+                  </a>
                 </div>
               ))
             ) : (

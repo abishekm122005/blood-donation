@@ -94,10 +94,15 @@ export default function BloodBanks() {
               <h3 className="text-xl font-bold text-gray-900 mb-2">{bank.name}</h3>
 
               <div className="space-y-3 mb-4">
-                <div className="flex items-start text-gray-700">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bank.name + ', ' + bank.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start text-gray-700 hover:text-red-600 hover:underline"
+                >
                   <MapPin className="w-5 h-5 mr-2 text-red-600 flex-shrink-0 mt-0.5" />
                   <span>{bank.address}</span>
-                </div>
+                </a>
                 <div className="flex items-center text-gray-700">
                   <Phone className="w-5 h-5 mr-2 text-red-600" />
                   <a href={`tel:${bank.phone}`} className="hover:underline">
@@ -124,9 +129,14 @@ export default function BloodBanks() {
                 </div>
               </div>
 
-              <button className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700">
-                View Details
-              </button>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bank.name + ', ' + bank.address)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 text-center"
+              >
+                View on Map
+              </a>
             </div>
           ))}
         </div>
