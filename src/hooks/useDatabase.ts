@@ -89,10 +89,44 @@ export function useDatabase() {
     }
   }, [supabase])
 
+  const getDonorsByCity = useCallback(async (
+    city: string,
+    bloodGroups?: string[]
+  ): Promise<Profile[]> => {
+    if (!supabase) {
+      setError('Supabase client not initialized')
+      return []
+    }
+
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_available', true)
+        .eq('is_donor', true)
+        .ilike('location', `%${city}%`)
+
+      if (bloodGroups && bloodGroups.length > 0) {
+        query = query.in('blood_group', bloodGroups)
+      }
+
+      const { data, error: err } = await query
+
+      if (err) throw err
+
+      return (data as Profile[]) || []
+    } catch (err: any) {
+      setError(err.message)
+      console.error('Error fetching donors by city:', err)
+      return []
+    }
+  }, [supabase])
+
   return {
     getProfile,
     updateProfile,
     searchDonors,
+    getDonorsByCity,
     error,
   }
 }

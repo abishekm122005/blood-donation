@@ -38,15 +38,18 @@ interface CampWithDistance extends DonationCamp {
 }
 
 function DonorDashboard({ profile, user }: { profile: Profile; user: { id: string } }) {
+  const [allCamps, setAllCamps] = useState<CampWithDistance[]>([])
   const [camps, setCamps] = useState<CampWithDistance[]>([])
   const [loadingCamps, setLoadingCamps] = useState(true)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [userCity, setUserCity] = useState('')
   const [locationLoading, setLocationLoading] = useState(false)
   const [registering, setRegistering] = useState<string | null>(null)
   const [registered, setRegistered] = useState<Set<string>>(new Set())
   const [campError, setCampError] = useState('')
+  const [campRadius, setCampRadius] = useState(25)
 
-  const sortByDistance = useCallback(
+  const computeCampsWithDistance = useCallback(
     (campList: CampWithDistance[], loc: { lat: number; lng: number } | null) => {
       if (!loc) return campList
       return campList
@@ -67,11 +70,23 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
     []
   )
 
+  // Filter camps within selected radius
+  const filterByRadius = useCallback(
+    (campList: CampWithDistance[], radius: number) => {
+      return campList.filter(camp => {
+        if (camp.distance === undefined) return false
+        return camp.distance <= radius
+      })
+    },
+    []
+  )
+
+  // Load all camps once
   useEffect(() => {
     const load = async () => {
       try {
         const data = await getDonationCamps('upcoming')
-        setCamps(sortByDistance(data as CampWithDistance[], userLocation))
+        setAllCamps(data as CampWithDistance[])
       } catch {
         setCampError('Failed to load camps')
       } finally {
@@ -79,15 +94,56 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
       }
     }
     load()
-  }, [userLocation, sortByDistance])
+  }, [])
+
+  // Recompute filtered camps when location, radius, or allCamps change
+  useEffect(() => {
+    const withDistance = computeCampsWithDistance(allCamps, userLocation)
+    if (userLocation) {
+      setCamps(filterByRadius(withDistance, campRadius))
+    } else {
+      setCamps(withDistance)
+    }
+  }, [allCamps, userLocation, campRadius, computeCampsWithDistance, filterByRadius])
+
+  // Reverse geocode to get city name
+  const detectCity = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'Accept-Language': 'en' } }
+      )
+      const data = await res.json()
+      if (data.address) {
+        const addr = data.address
+        setUserCity(addr.city || addr.town || addr.village || addr.county || '')
+      }
+    } catch {
+      // fallback: extract from profile location
+      if (profile.location) {
+        const parts = profile.location.split(',').map((p: string) => p.trim()).filter(Boolean)
+        setUserCity(parts.length > 1 ? parts[parts.length - 1] : parts[0] || '')
+      }
+    }
+  }, [profile.location])
+
+  // Auto-detect location on mount: use profile coords or ask for GPS
+  useEffect(() => {
+    if (profile.latitude && profile.longitude) {
+      setUserLocation({ lat: profile.latitude, lng: profile.longitude })
+      detectCity(profile.latitude, profile.longitude)
+    }
+  }, [profile.latitude, profile.longitude, detectCity])
 
   const enableLocation = () => {
     if (!navigator.geolocation) return
     setLocationLoading(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setUserLocation(loc)
         setLocationLoading(false)
+        detectCity(loc.lat, loc.lng)
       },
       () => setLocationLoading(false),
       { enableHighAccuracy: true, timeout: 10000 }
@@ -159,24 +215,45 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
           <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Upcoming Donation Camps</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Register for a camp near you to donate blood</p>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {userCity ? `Camps near ${userCity}` : 'Upcoming Donation Camps'}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {userLocation
+                    ? `Showing camps within ${campRadius} km of your location`
+                    : 'Register for a camp near you to donate blood'}
+                </p>
               </div>
-              {!userLocation ? (
-                <button
-                  onClick={enableLocation}
-                  disabled={locationLoading}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-                >
-                  {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
-                  Nearby
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 rounded-full border border-green-200">
-                  <Navigation className="w-3 h-3" />
-                  Sorted by distance
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {userLocation && (
+                  <select
+                    value={campRadius}
+                    onChange={e => setCampRadius(Number(e.target.value))}
+                    className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-red-500"
+                  >
+                    <option value={5}>5 km</option>
+                    <option value={10}>10 km</option>
+                    <option value={25}>25 km</option>
+                    <option value={50}>50 km</option>
+                    <option value={100}>100 km</option>
+                  </select>
+                )}
+                {!userLocation ? (
+                  <button
+                    onClick={enableLocation}
+                    disabled={locationLoading}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
+                    Nearby
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 rounded-full border border-green-200">
+                    <Navigation className="w-3 h-3" />
+                    {userCity || 'Located'}
+                  </span>
+                )}
+              </div>
             </div>
 
             {campError && (
@@ -272,8 +349,17 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
               ) : (
                 <div className="text-center py-12">
                   <Tent className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 font-medium">No upcoming camps found</p>
-                  <p className="text-gray-400 text-sm mt-1">Check back later for new camps</p>
+                  {userLocation ? (
+                    <>
+                      <p className="text-gray-500 font-medium">No camps found within {campRadius} km{userCity ? ` of ${userCity}` : ''}</p>
+                      <p className="text-gray-400 text-sm mt-1">Try increasing the radius or check back later</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-500 font-medium">No upcoming camps found</p>
+                      <p className="text-gray-400 text-sm mt-1">Check back later for new camps</p>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -357,8 +443,21 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
    RECIPIENT DASHBOARD
    ============================ */
 function RecipientDashboard({ profile }: { profile: Profile }) {
+  const { getDonorsByCity } = useDatabase()
   const [requests, setRequests] = useState<BloodRequest[]>([])
+  const [nearbyDonors, setNearbyDonors] = useState<Profile[]>([])
   const [loadingRequests, setLoadingRequests] = useState(true)
+  const [loadingDonors, setLoadingDonors] = useState(true)
+  const [receiverCity, setReceiverCity] = useState('')
+
+  // Extract city name from profile location (e.g. "RS Puram, Coimbatore" → "Coimbatore")
+  const extractCity = (location: string): string => {
+    if (!location) return ''
+    const parts = location.split(',').map(p => p.trim()).filter(Boolean)
+    // Use the last meaningful part as city (usually "City" or "City, State")
+    // For "Coimbatore" → "Coimbatore", for "RS Puram, Coimbatore" → "Coimbatore"
+    return parts.length > 1 ? parts[parts.length - 1] : parts[0] || ''
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -373,6 +472,29 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
     }
     load()
   }, [])
+
+  // Fetch donors from same city as receiver
+  useEffect(() => {
+    const city = extractCity(profile.location)
+    setReceiverCity(city)
+    if (!city) {
+      setLoadingDonors(false)
+      return
+    }
+    const fetchDonors = async () => {
+      setLoadingDonors(true)
+      try {
+        const compatibleGroups = getCompatibleGroups(profile.blood_group)
+        const donors = await getDonorsByCity(city, compatibleGroups)
+        setNearbyDonors(donors)
+      } catch {
+        // silent
+      } finally {
+        setLoadingDonors(false)
+      }
+    }
+    fetchDonors()
+  }, [profile.location, profile.blood_group, getDonorsByCity])
 
   return (
     <div className="space-y-8">
@@ -399,8 +521,8 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Donors Found</span>
             <Search className="w-5 h-5 text-green-500" />
           </div>
-          <p className="text-xl font-bold text-gray-900">--</p>
-          <p className="text-xs text-gray-500 mt-1">Search to find donors</p>
+          <p className="text-xl font-bold text-gray-900">{nearbyDonors.length > 0 ? nearbyDonors.length : '--'}</p>
+          <p className="text-xs text-gray-500 mt-1">{nearbyDonors.length > 0 ? 'Nearby donors' : 'Search to find donors'}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-md p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-2">
@@ -453,6 +575,99 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
                 <Siren className="w-5 h-5" />
                 Create Emergency Blood Request
               </Link>
+            </div>
+          </div>
+
+          {/* Nearby Donors — Same City */}
+          <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Donors in {receiverCity || 'Your City'}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Compatible donors ({profile.blood_group}) in your city
+                </p>
+              </div>
+              {receiverCity && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 rounded-full border border-green-200">
+                  <MapPin className="w-3 h-3" />
+                  {receiverCity}
+                </span>
+              )}
+            </div>
+            <div className="p-4">
+              {loadingDonors ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-red-600 mb-2" />
+                  <p className="text-gray-500 text-sm">Finding donors in {receiverCity || 'your city'}...</p>
+                </div>
+              ) : !receiverCity ? (
+                <div className="text-center py-10">
+                  <MapPin className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium">No location set in your profile</p>
+                  <p className="text-gray-400 text-sm mt-1">Update your profile with your city to see nearby donors</p>
+                </div>
+              ) : nearbyDonors.length > 0 ? (
+                <div className="space-y-3">
+                  {nearbyDonors.slice(0, 6).map(donor => (
+                    <div key={donor.id} className="border border-gray-100 rounded-xl p-4 hover:border-red-200 hover:bg-red-50/30 transition-all">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                            {donor.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-sm">{donor.full_name}</h3>
+                            <p className="text-xs text-gray-500">Age: {donor.age}</p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-sm font-bold">
+                          {donor.blood_group}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-red-500" />
+                          {donor.location}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5 text-red-500" />
+                          {donor.phone}
+                        </span>
+                      </div>
+                      <a
+                        href={`tel:${donor.phone}`}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700 transition-colors"
+                      >
+                        <Phone className="w-4 h-4" />
+                        Contact Donor
+                      </a>
+                    </div>
+                  ))}
+
+                  {nearbyDonors.length > 6 && (
+                    <Link
+                      href="/search"
+                      className="flex items-center justify-center gap-2 w-full py-3 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                    >
+                      View All {nearbyDonors.length} Donors
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                  <Heart className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium">No donors found in {receiverCity}</p>
+                  <p className="text-gray-400 text-sm mt-1">Try searching manually for other areas</p>
+                  <Link
+                    href="/search"
+                    className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors"
+                  >
+                    <Search className="w-4 h-4" />
+                    Search Donors
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

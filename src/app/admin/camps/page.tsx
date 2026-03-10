@@ -13,6 +13,10 @@ import {
   Plus, Edit2, Trash2, MapPin, Calendar, User, Phone,
   AlertCircle, Check, Loader2, ArrowLeft, X, Shield
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import 'leaflet/dist/leaflet.css'
+
+const LocationPicker = dynamic(() => import('@/components/LocationPicker'), { ssr: false })
 
 const EMPTY_FORM = {
   name: '',
@@ -261,6 +265,18 @@ export default function AdminCamps() {
                     onChange={(e) => updateField('location', e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-red-500 transition-colors"
                     placeholder="City Hall, Main Street, Mumbai"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Set Coordinates</label>
+                  <LocationPicker
+                    latitude={formData.latitude}
+                    longitude={formData.longitude}
+                    onLocationSelect={(lat, lng) => {
+                      updateField('latitude', lat)
+                      updateField('longitude', lng)
+                    }}
                   />
                 </div>
 

@@ -6,7 +6,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { DonationCamp } from '@/types/database'
 import {
   MapPin, User, Phone, Calendar, Navigation, Loader2,
-  AlertCircle, Check, LocateFixed, ArrowUpDown
+  AlertCircle, Check, LocateFixed, ArrowUpDown, Tent
 } from 'lucide-react'
 
 interface CampWithDistance extends DonationCamp {
@@ -15,19 +15,22 @@ interface CampWithDistance extends DonationCamp {
 
 export default function DonationCamps() {
   const { user } = useAuth()
+  const [allCamps, setAllCamps] = useState<CampWithDistance[]>([])
   const [camps, setCamps] = useState<CampWithDistance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'ongoing' | 'completed'>('upcoming')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [userCity, setUserCity] = useState('')
   const [locationLoading, setLocationLoading] = useState(false)
   const [locationEnabled, setLocationEnabled] = useState(false)
   const [registering, setRegistering] = useState<string | null>(null)
   const [registered, setRegistered] = useState<Set<string>>(new Set())
+  const [campRadius, setCampRadius] = useState(25)
 
-  const sortCampsByDistance = useCallback(
+  const computeDistances = useCallback(
     (campList: CampWithDistance[], loc: { lat: number; lng: number } | null) => {
-      if (!loc) return campList
+      if (!loc) return campList.map(c => ({ ...c, distance: undefined }))
       return campList
         .map(camp => ({
           ...camp,
@@ -46,31 +49,51 @@ export default function DonationCamps() {
     []
   )
 
+  // Load camps when filter changes
   const loadCamps = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const data = await getDonationCamps(filterStatus === 'all' ? undefined : filterStatus)
-      const sorted = sortCampsByDistance(data as CampWithDistance[], userLocation)
-      setCamps(sorted)
+      setAllCamps(data as CampWithDistance[])
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load camps'
       setError(message)
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, userLocation, sortCampsByDistance])
+  }, [filterStatus])
 
   useEffect(() => {
     loadCamps()
   }, [loadCamps])
 
-  // Re-sort when location changes
+  // Recompute filtered camps when location, radius, or allCamps change
   useEffect(() => {
-    if (userLocation && camps.length > 0) {
-      setCamps(prev => sortCampsByDistance(prev, userLocation))
+    const withDistance = computeDistances(allCamps, userLocation)
+    if (userLocation) {
+      setCamps(withDistance.filter(c => c.distance !== undefined && c.distance <= campRadius))
+    } else {
+      setCamps(withDistance)
     }
-  }, [userLocation, sortCampsByDistance]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allCamps, userLocation, campRadius, computeDistances])
+
+  // Reverse geocode to get city name
+  const detectCity = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'Accept-Language': 'en' } }
+      )
+      const data = await res.json()
+      if (data.address) {
+        const addr = data.address
+        setUserCity(addr.city || addr.town || addr.village || addr.county || '')
+      }
+    } catch {
+      // silent
+    }
+  }, [])
 
   const enableLocation = () => {
     if (!navigator.geolocation) {
@@ -81,9 +104,11 @@ export default function DonationCamps() {
     setLocationLoading(true)
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude })
+        const loc = { lat: position.coords.latitude, lng: position.coords.longitude }
+        setUserLocation(loc)
         setLocationEnabled(true)
         setLocationLoading(false)
+        detectCity(loc.lat, loc.lng)
       },
       (err) => {
         setError(
@@ -100,8 +125,7 @@ export default function DonationCamps() {
   const disableLocation = () => {
     setUserLocation(null)
     setLocationEnabled(false)
-    // Remove distance from camps
-    setCamps(prev => prev.map(c => ({ ...c, distance: undefined })))
+    setUserCity('')
   }
 
   const handleRegister = async (campId: string) => {
@@ -134,7 +158,7 @@ export default function DonationCamps() {
           <p className="text-gray-500">Find and register for blood donation camps near you</p>
         </div>
 
-        {/* Location Toggle */}
+        {/* Location Toggle + Radius */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
           {!locationEnabled ? (
             <button
@@ -150,12 +174,24 @@ export default function DonationCamps() {
               {locationLoading ? 'Getting location...' : 'Show Nearby Camps'}
             </button>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
               <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium">
                 <Navigation className="w-4 h-4" />
-                Live location active
-                <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-green-500" />
-                <span className="text-green-500">Sorted by distance</span>
+                {userCity ? `Camps near ${userCity}` : 'Location active'}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-600">Radius:</label>
+                <select
+                  value={campRadius}
+                  onChange={e => setCampRadius(Number(e.target.value))}
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-red-500"
+                >
+                  <option value={5}>5 km</option>
+                  <option value={10}>10 km</option>
+                  <option value={25}>25 km</option>
+                  <option value={50}>50 km</option>
+                  <option value={100}>100 km</option>
+                </select>
               </div>
               <button
                 onClick={disableLocation}
@@ -286,9 +322,18 @@ export default function DonationCamps() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-            <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No camps found</p>
-            <p className="text-gray-400 text-sm mt-1">Try a different filter or check back later</p>
+            <Tent className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            {locationEnabled ? (
+              <>
+                <p className="text-gray-500 text-lg">No camps found within {campRadius} km{userCity ? ` of ${userCity}` : ''}</p>
+                <p className="text-gray-400 text-sm mt-1">Try increasing the radius or changing the filter</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-500 text-lg">No camps found</p>
+                <p className="text-gray-400 text-sm mt-1">Try a different filter or check back later</p>
+              </>
+            )}
           </div>
         )}
       </div>
