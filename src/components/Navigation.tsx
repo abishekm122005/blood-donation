@@ -3,10 +3,13 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useAuth } from './AuthProvider'
+import { Bell } from 'lucide-react'
 
 export default function Navigation() {
   const { user, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
+
+  const closeMenu = () => setIsOpen(false)
 
   const handleLogout = async () => {
     await signOut()
@@ -41,6 +44,9 @@ export default function Navigation() {
               <>
                 <Link href="/dashboard" className="hover:bg-red-700 px-3 py-2 rounded">
                   Dashboard
+                </Link>
+                <Link href="/notifications" className="relative hover:bg-red-700 p-2 rounded" title="Notifications">
+                  <Bell className="w-5 h-5" />
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -78,25 +84,28 @@ export default function Navigation() {
         {/* Mobile Menu */}
         {isOpen && (
           <div className="md:hidden pb-4 space-y-2">
-            <Link href="/search" className="block hover:bg-red-700 px-3 py-2 rounded">
+            <Link href="/search" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
               Find Donors
             </Link>
-            <Link href="/request-blood" className="block hover:bg-red-700 px-3 py-2 rounded">
+            <Link href="/request-blood" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
               Request Blood
             </Link>
-            <Link href="/camps" className="block hover:bg-red-700 px-3 py-2 rounded">
+            <Link href="/camps" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
               Donation Camps
             </Link>
-            <Link href="/blood-banks" className="block hover:bg-red-700 px-3 py-2 rounded">
+            <Link href="/blood-banks" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
               Blood Banks
             </Link>
             {user ? (
               <>
-                <Link href="/dashboard" className="block hover:bg-red-700 px-3 py-2 rounded">
+                <Link href="/dashboard" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
                   Dashboard
                 </Link>
+                <Link href="/notifications" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
+                  Notifications
+                </Link>
                 <button
-                  onClick={handleLogout}
+                  onClick={() => { closeMenu(); handleLogout() }}
                   className="w-full text-left bg-red-700 hover:bg-red-800 px-3 py-2 rounded"
                 >
                   Logout
@@ -104,11 +113,12 @@ export default function Navigation() {
               </>
             ) : (
               <>
-                <Link href="/auth/login" className="block hover:bg-red-700 px-3 py-2 rounded">
+                <Link href="/auth/login" onClick={closeMenu} className="block hover:bg-red-700 px-3 py-2 rounded">
                   Login
                 </Link>
                 <Link
                   href="/auth/register"
+                  onClick={closeMenu}
                   className="block bg-white text-red-600 hover:bg-gray-100 px-3 py-2 rounded font-semibold"
                 >
                   Register

@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { useDatabase } from '@/hooks/useDatabase'
 import { Profile, DonationCamp } from '@/types/database'
-import { getDonationCamps, registerForCamp, calculateDistance, getBloodRequests } from '@/lib/database'
-import type { BloodRequest } from '@/types/database'
+import { getDonationCamps, registerForCamp, calculateDistance, getBloodRequests, getDonationHistory, getUserBloodRequests, updateBloodRequest } from '@/lib/database'
+import type { BloodRequest, DonationHistory } from '@/types/database'
 import Link from 'next/link'
 import {
   Heart, MapPin, Activity, User, Phone, Mail, Calendar,
@@ -48,6 +48,8 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
   const [registered, setRegistered] = useState<Set<string>>(new Set())
   const [campError, setCampError] = useState('')
   const [campRadius, setCampRadius] = useState(25)
+  const [donationCount, setDonationCount] = useState(0)
+  const [lastDonation, setLastDonation] = useState<string | null>(null)
 
   const computeCampsWithDistance = useCallback(
     (campList: CampWithDistance[], loc: { lat: number; lng: number } | null) => {
@@ -95,6 +97,22 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
     }
     load()
   }, [])
+
+  // Fetch donation stats
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const history = await getDonationHistory(user.id)
+        setDonationCount(history.length)
+        if (history.length > 0) {
+          setLastDonation(history[0].donation_date)
+        }
+      } catch {
+        // silent - stats default to 0/null
+      }
+    }
+    loadStats()
+  }, [user.id])
 
   // Recompute filtered camps when location, radius, or allCamps change
   useEffect(() => {
@@ -186,7 +204,7 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Donations</span>
             <Heart className="w-5 h-5 text-pink-500" />
           </div>
-          <p className="text-3xl font-bold text-gray-900">0</p>
+          <p className="text-3xl font-bold text-gray-900">{donationCount}</p>
           <p className="text-xs text-gray-500 mt-1">Total donations</p>
         </div>
         <div className="bg-white rounded-2xl shadow-md p-5 border border-gray-100">
@@ -194,8 +212,8 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Last Donated</span>
             <Clock className="w-5 h-5 text-blue-500" />
           </div>
-          <p className="text-xl font-bold text-gray-900">Never</p>
-          <p className="text-xs text-gray-500 mt-1">Be the first!</p>
+          <p className="text-xl font-bold text-gray-900">{lastDonation ? new Date(lastDonation).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Never'}</p>
+          <p className="text-xs text-gray-500 mt-1">{lastDonation ? 'Keep it up!' : 'Be the first!'}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-md p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-2">
@@ -445,10 +463,13 @@ function DonorDashboard({ profile, user }: { profile: Profile; user: { id: strin
 function RecipientDashboard({ profile }: { profile: Profile }) {
   const { getDonorsByCity } = useDatabase()
   const [requests, setRequests] = useState<BloodRequest[]>([])
+  const [myRequests, setMyRequests] = useState<BloodRequest[]>([])
   const [nearbyDonors, setNearbyDonors] = useState<Profile[]>([])
   const [loadingRequests, setLoadingRequests] = useState(true)
+  const [loadingMyRequests, setLoadingMyRequests] = useState(true)
   const [loadingDonors, setLoadingDonors] = useState(true)
   const [receiverCity, setReceiverCity] = useState('')
+  const [closingRequest, setClosingRequest] = useState<string | null>(null)
 
   // Extract city name from profile location (e.g. "RS Puram, Coimbatore" → "Coimbatore")
   const extractCity = (location: string): string => {
@@ -472,6 +493,33 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
     }
     load()
   }, [])
+
+  // Fetch user's own blood requests
+  useEffect(() => {
+    const loadMyRequests = async () => {
+      try {
+        const data = await getUserBloodRequests(profile.id)
+        setMyRequests(data)
+      } catch {
+        // silent
+      } finally {
+        setLoadingMyRequests(false)
+      }
+    }
+    loadMyRequests()
+  }, [profile.id])
+
+  const handleCloseRequest = async (requestId: string, newStatus: 'fulfilled' | 'closed') => {
+    setClosingRequest(requestId)
+    try {
+      await updateBloodRequest(requestId, { status: newStatus })
+      setMyRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r))
+    } catch {
+      // silent
+    } finally {
+      setClosingRequest(null)
+    }
+  }
 
   // Fetch donors from same city as receiver
   useEffect(() => {
@@ -513,7 +561,7 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Requests</span>
             <FileText className="w-5 h-5 text-blue-500" />
           </div>
-          <p className="text-3xl font-bold text-gray-900">0</p>
+          <p className="text-3xl font-bold text-gray-900">{myRequests.filter(r => r.status === 'open').length}</p>
           <p className="text-xs text-gray-500 mt-1">Active requests</p>
         </div>
         <div className="bg-white rounded-2xl shadow-md p-5 border border-gray-100">
@@ -728,6 +776,90 @@ function RecipientDashboard({ profile }: { profile: Profile }) {
                 <div className="text-center py-8">
                   <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500 font-medium">No open requests right now</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* My Blood Requests — Manage */}
+          <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">My Blood Requests</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Manage your submitted requests</p>
+              </div>
+              <Link href="/request-blood" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                <Siren className="w-3.5 h-3.5" />
+                New Request
+              </Link>
+            </div>
+            <div className="p-4">
+              {loadingMyRequests ? (
+                <div className="flex flex-col items-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-red-600 mb-2" />
+                  <p className="text-gray-500 text-sm">Loading your requests...</p>
+                </div>
+              ) : myRequests.length > 0 ? (
+                <div className="space-y-3">
+                  {myRequests.map(req => (
+                    <div key={req.id} className="border border-gray-100 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-sm font-bold">
+                            {req.blood_group}
+                          </span>
+                          <span className="font-semibold text-gray-900 text-sm">{req.hospital_name}</span>
+                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          req.status === 'open' ? 'bg-blue-100 text-blue-700' :
+                          req.status === 'fulfilled' ? 'bg-green-100 text-green-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5" />
+                          {req.location}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Droplets className="w-3.5 h-3.5" />
+                          {req.units_needed} unit{req.units_needed > 1 ? 's' : ''}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {new Date(req.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                      {req.status === 'open' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleCloseRequest(req.id, 'fulfilled')}
+                            disabled={closingRequest === req.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                          >
+                            {closingRequest === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            Mark Fulfilled
+                          </button>
+                          <button
+                            onClick={() => handleCloseRequest(req.id, 'closed')}
+                            disabled={closingRequest === req.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-gray-200 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            Close
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium">No requests yet</p>
+                  <p className="text-gray-400 text-sm mt-1">Create a blood request when you need blood</p>
                 </div>
               )}
             </div>

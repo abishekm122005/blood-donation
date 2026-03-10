@@ -263,9 +263,21 @@ export default function SearchDonors() {
                     </div>
 
                     <div className="flex gap-2">
-                      <button className="flex-1 bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700">
-                        Contact
-                      </button>
+                      <a
+                        href={`tel:${donor.phone}`}
+                        className="flex-1 bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 text-center flex items-center justify-center gap-1.5"
+                      >
+                        <Phone size={16} />
+                        Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${donor.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${donor.full_name}, I found you on BloodConnect. I need ${bloodGroup || 'blood'} urgently. Can you help?`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 text-center flex items-center justify-center gap-1.5"
+                      >
+                        WhatsApp
+                      </a>
                     </div>
                   </div>
                 ))}

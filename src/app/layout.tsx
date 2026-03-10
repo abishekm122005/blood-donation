@@ -43,29 +43,31 @@ export default function RootLayout({
               <div>
                 <h4 className="font-semibold mb-4">Quick Links</h4>
                 <ul className="space-y-2 text-gray-400">
-                  <li><a href="#" className="hover:text-white">Find Donors</a></li>
-                  <li><a href="#" className="hover:text-white">Request Blood</a></li>
-                  <li><a href="#" className="hover:text-white">Donation Camps</a></li>
+                  <li><a href="/search" className="hover:text-white">Find Donors</a></li>
+                  <li><a href="/request-blood" className="hover:text-white">Request Blood</a></li>
+                  <li><a href="/camps" className="hover:text-white">Donation Camps</a></li>
+                  <li><a href="/blood-banks" className="hover:text-white">Blood Banks</a></li>
                 </ul>
               </div>
               <div>
-                <h4 className="font-semibold mb-4">Support</h4>
+                <h4 className="font-semibold mb-4">Account</h4>
                 <ul className="space-y-2 text-gray-400">
-                  <li><a href="#" className="hover:text-white">About Us</a></li>
-                  <li><a href="#" className="hover:text-white">Contact</a></li>
-                  <li><a href="#" className="hover:text-white">FAQ</a></li>
+                  <li><a href="/auth/login" className="hover:text-white">Login</a></li>
+                  <li><a href="/auth/register" className="hover:text-white">Register</a></li>
+                  <li><a href="/dashboard" className="hover:text-white">Dashboard</a></li>
                 </ul>
               </div>
               <div>
-                <h4 className="font-semibold mb-4">Legal</h4>
+                <h4 className="font-semibold mb-4">Information</h4>
                 <ul className="space-y-2 text-gray-400">
-                  <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                  <li><a href="#" className="hover:text-white">Terms of Service</a></li>
+                  <li><span className="text-gray-500">Emergency: 102</span></li>
+                  <li><span className="text-gray-500">Red Cross: 1800-11-7263</span></li>
+                  <li><a href="mailto:support@bloodconnect.com" className="hover:text-white">support@bloodconnect.com</a></li>
                 </ul>
               </div>
             </div>
             <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-              <p>&copy; 2024 BloodConnect. All rights reserved.</p>
+              <p>&copy; {new Date().getFullYear()} BloodConnect. All rights reserved.</p>
             </div>
           </div>
         </footer>

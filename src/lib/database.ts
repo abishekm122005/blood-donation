@@ -1,5 +1,5 @@
 import { getSupabaseClient } from './supabase'
-import { Profile, BloodRequest, DonationCamp, Notification } from '@/types/database'
+import { Profile, BloodRequest, DonationCamp, Notification, DonationHistory } from '@/types/database'
 
 // Profile Functions
 export async function getProfile(userId: string) {
@@ -157,6 +157,43 @@ export async function markNotificationAsRead(notificationId: string) {
     .eq('id', notificationId)
   
   if (error) throw error
+}
+
+// Donation History Functions
+export async function getDonationHistory(donorId: string) {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('donation_history')
+    .select('*')
+    .eq('donor_id', donorId)
+    .order('donation_date', { ascending: false })
+
+  if (error) throw error
+  return data as DonationHistory[]
+}
+
+export async function addDonation(donation: Partial<DonationHistory>) {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('donation_history')
+    .insert([donation])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as DonationHistory
+}
+
+export async function getUserBloodRequests(userId: string) {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('blood_requests')
+    .select('*')
+    .eq('requester_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data as BloodRequest[]
 }
 
 // Utility Functions

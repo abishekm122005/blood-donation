@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import {
   Heart, Droplets, Phone, MapPin, User,
-  AlertCircle, Loader2, Check, ArrowRight
+  AlertCircle, Loader2, Check, ArrowRight, LocateFixed
 } from 'lucide-react'
 import { createUserProfile } from '@/app/actions/auth'
 
@@ -26,6 +26,9 @@ export default function CompleteProfile() {
     bloodGroup: '',
     isDonor: true,
   })
+
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [detectingLocation, setDetectingLocation] = useState(false)
 
   // Pre-fill name from Google metadata
   useEffect(() => {
@@ -89,6 +92,8 @@ export default function CompleteProfile() {
         blood_group: formData.bloodGroup,
         phone: formData.phone.trim(),
         location: formData.location.trim(),
+        latitude: userCoords?.lat ?? 0,
+        longitude: userCoords?.lng ?? 0,
         is_donor: formData.isDonor,
       })
 
@@ -205,12 +210,43 @@ export default function CompleteProfile() {
                   type="text"
                   value={formData.location}
                   onChange={(e) => updateField('location', e.target.value)}
-                  className={`w-full pl-11 pr-4 py-3 border-2 rounded-xl focus:outline-none transition-colors ${
+                  className={`w-full pl-11 pr-24 py-3 border-2 rounded-xl focus:outline-none transition-colors ${
                     fieldErrors.location ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-red-500'
                   }`}
                   placeholder="Mumbai, Maharashtra"
                 />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!navigator.geolocation) return
+                    setDetectingLocation(true)
+                    navigator.geolocation.getCurrentPosition(
+                      async (pos) => {
+                        const { latitude, longitude } = pos.coords
+                        setUserCoords({ lat: latitude, lng: longitude })
+                        try {
+                          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, { headers: { 'Accept-Language': 'en' } })
+                          const data = await res.json()
+                          if (data.address) {
+                            const addr = data.address
+                            const locationStr = [addr.city || addr.town || addr.village, addr.state].filter(Boolean).join(', ')
+                            updateField('location', locationStr || data.display_name)
+                          }
+                        } catch { /* coords saved */ }
+                        setDetectingLocation(false)
+                      },
+                      () => setDetectingLocation(false),
+                      { enableHighAccuracy: true, timeout: 10000 }
+                    )
+                  }}
+                  disabled={detectingLocation}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100 transition disabled:opacity-50"
+                >
+                  {detectingLocation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LocateFixed className="w-3.5 h-3.5" />}
+                  {detectingLocation ? 'Detecting' : 'GPS'}
+                </button>
               </div>
+              {userCoords && <p className="mt-1 text-xs text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> Location coordinates saved</p>}
               {fieldErrors.location && <p className="mt-1.5 text-sm text-red-500">{fieldErrors.location}</p>}
             </div>
 

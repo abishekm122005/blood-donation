@@ -21,6 +21,8 @@ export async function createUserProfile(profileData: {
   blood_group: string
   phone: string
   location: string
+  latitude?: number
+  longitude?: number
   is_donor: boolean
 }) {
   try {
@@ -43,6 +45,8 @@ export async function createUserProfile(profileData: {
           blood_group: profileData.blood_group,
           phone: profileData.phone,
           location: profileData.location,
+          latitude: profileData.latitude ?? 0,
+          longitude: profileData.longitude ?? 0,
           is_donor: profileData.is_donor,
           updated_at: new Date().toISOString(),
         })
